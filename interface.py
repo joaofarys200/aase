@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import openai
+import google.generativeai as genai
 from joblib import load
 from sklearn.metrics import mean_absolute_error, mean_squared_error, accuracy_score, confusion_matrix
 from sklearn.ensemble import RandomForestRegressor
@@ -31,7 +33,10 @@ except Exception as e:
 # -------------------------
 # Helpers
 # -------------------------
-def gerar_relatorio_pessoal(valores, classe):
+def gerar_relatorio_classico(valores, classe):
+    """
+    Fallback: Gera relatório baseado em regras simples caso a IA falhe.
+    """
     erros = []
     sugestoes = []
     pontos_fortes = []
@@ -45,7 +50,7 @@ def gerar_relatorio_pessoal(valores, classe):
 
     if screen > 8:
         erros.append("Tempo de ecrã diário acima de 8 horas.")
-        sugestoes.append("Reduzir o tempo de ecrã (especialmente fora do trabalho) e fazer pausas regulares ao longo do dia.")
+        sugestoes.append("Reduzir o tempo de ecrã (especialmente fora do trabalho).")
     elif screen < 4:
         pontos_fortes.append("Tempo de ecrã moderado.")
 
@@ -67,14 +72,52 @@ def gerar_relatorio_pessoal(valores, classe):
     else:
         pontos_fortes.append("Boa prática de atividade física.")
 
-    if prod < 50:
-        erros.append("Produtividade relatada baixa.")
-        sugestoes.append("Planear o dia com blocos de foco.")
-    elif prod >= 80:
-        pontos_fortes.append("Boa perceção de produtividade.")
+    relatorio = f"""
+    ### Relatório (Modo Clássico)
+    **Classificação:** {classe}
+    
+    **Pontos Fortes:**
+    {''.join([f'- {p}  \n' for p in pontos_fortes]) if pontos_fortes else '- (Nenhum destaque registado)'}
+    
+    **Atenção:**
+    {''.join([f'- {e}  \n' for e in erros]) if erros else '- (Nenhum alerta registado)'}
+    
+    **Sugestões:**
+    {''.join([f'- {s}  \n' for s in sugestoes]) if sugestoes else '- (Manter a rotina atual)'}
+    """
+    return relatorio
 
-    resumo_classe = f"O modelo classificou o nível global de bem‑estar como: **{classe}**."
-    return resumo_classe, erros, sugestoes, pontos_fortes
+def gerar_relatorio_ia(valores, classe, api_key_val):
+    if not api_key_val or api_key_val == "...":
+        return gerar_relatorio_classico(valores, classe)
+    
+    try:
+        # Configurar Google Gemini
+        genai.configure(api_key=api_key_val)
+        
+        # Tentar usar o alias 'gemini-flash-latest' que aponta para a versão estável mais recente
+        model = genai.GenerativeModel('gemini-flash-latest')
+        
+        prompt = f"""
+        Atue como um especialista em saúde mental e bem-estar digital.
+        O sistema classificou o bem-estar deste utilizador como: **{classe}**.
+        
+        Dados:
+        - Tempo de ecrã: {valores['screen_time_hours']}h
+        - Stress (0-10): {valores['stress_level_0_10']}
+        - Sono: {valores['sleep_hours']}h (Qualidade: {valores['sleep_quality_1_5']}/5)
+        - Exercício: {valores['exercise_minutes_per_week']} min/sem
+        - Produtividade: {valores['productivity_0_100']}
+        
+        Escreva um relatório curto, direto e motivador. Fale diretamente com o utilizador.
+        IMPORTANTE: Escreva estritamente em Português de Portugal (pt-PT). Use termos como "ecrã" em vez de "tela", "equipa" em vez de "time", etc.
+        """
+        
+        response = model.generate_content(prompt)
+        return response.text
+        
+    except Exception as e:
+        return f"⚠️ **Erro na IA (Gemini):** {e}\n\n" + gerar_relatorio_classico(valores, classe)
 
 
 # -------------------------
@@ -119,19 +162,13 @@ def run_forecast_page():
             pred_class = pred[0]
             st.success(f"Classe prevista de bem‑estar mental: **{pred_class}**")
 
-            resumo, erros, sugestoes, fortes = gerar_relatorio_pessoal(input_row, pred_class)
-            st.markdown("### Relatório personalizado do dia")
-            st.write(resumo)
+            # Gerar relatório com IA
+            with st.spinner('A gerar o relatório personalizado com IA...'):
+                relatorio = gerar_relatorio_ia(input_row, pred_class, GOOGLE_API_KEY)
+            
+            st.markdown("### 🤖 Relatório Personalizado com Parceria com o (Gemini)")
+            st.markdown(relatorio)
 
-            if erros:
-                st.markdown("**Principais riscos:**")
-                for e in erros: st.write(f"- {e}")
-            if sugestoes:
-                st.markdown("**Sugestões:**")
-                for s in sugestoes: st.write(f"- {s}")
-            if fortes:
-                st.markdown("**Pontos fortes:**")
-                for p in fortes: st.write(f"- {p}")
         except Exception as e:
             st.error(f"Falha na previsão: {e}")
 
@@ -337,6 +374,10 @@ def run_powerbi_page():
 # -------------------------
 st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2966/2966327.png", width=50) # Ícone generico
 st.sidebar.title("Navegação AASE")
+
+# API Key Fixa (Substitua "..." pela sua chave real da Google)
+GOOGLE_API_KEY = "AIzaSyCqIo6PihbSF6Zt7HQPK-0xvXKxYCmDw6c" 
+
 page = st.sidebar.radio("Selecione a página:", 
     ["Previsão Individual", "Avaliação dos Modelos", "Dashboards Power BI"]
 )
