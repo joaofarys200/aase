@@ -1615,7 +1615,8 @@ if 'df_feat' in globals() and 'mental_wellness_index_0_100' in df_feat.columns:
 
             # PARAMETROS DA BASE DE DADOS (substituir pelo teu utilizador/password)
             USER = 'root'
-            PASSWORD = 'aase2025'
+            import os
+            PASSWORD = os.getenv('DB_PASSWORD', '')
             HOST = 'localhost'
             PORT = 3306
             DB = 'aase_wellness'
