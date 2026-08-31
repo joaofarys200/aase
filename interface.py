@@ -376,7 +376,8 @@ st.sidebar.image("https://cdn-icons-png.flaticon.com/512/2966/2966327.png", widt
 st.sidebar.title("Navegação AASE")
 
 # API Key Fixa (Substitua "..." pela sua chave real da Google)
-GOOGLE_API_KEY = "AIzaSyCqIo6PihbSF6Zt7HQPK-0xvXKxYCmDw6c" 
+import os
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "") 
 
 page = st.sidebar.radio("Selecione a página:", 
     ["Previsão Individual", "Avaliação dos Modelos", "Dashboards Power BI"]
